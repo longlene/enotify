@@ -1,5 +1,8 @@
 #include "common.h"
 #include "cli.h"
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <stdio.h>
 
 // TODO: set on fire. cli.{h,c} handle both parsing and defaults, so there's
 //       no need to set those here. also, in order to scope metadata by path,
@@ -49,12 +52,14 @@ static void append_path(const char* path)
 static inline void parse_cli_settings(int argc, const char* argv[])
 {
   // runtime os version detection
-  SInt32 osMajorVersion, osMinorVersion;
-  if (!(Gestalt(gestaltSystemVersionMajor, &osMajorVersion) == noErr)) {
-    osMajorVersion = 0;
-  }
-  if (!(Gestalt(gestaltSystemVersionMinor, &osMinorVersion) == noErr)) {
-    osMinorVersion = 0;
+  char buf[25];
+  size_t buflen = 25;
+  sysctlbyname("kern.osproductversion", &buf, &buflen, NULL, 0);
+  int osMajorVersion, osMinorVersion;
+  int res = sscanf(buf, "%d.%d", &osMajorVersion, &osMinorVersion);
+  if (res != 2)
+  {
+    osMajorVersion = osMinorVersion = 0;
   }
 
   if ((osMajorVersion == 10) & (osMinorVersion < 5)) {
@@ -85,29 +90,29 @@ static inline void parse_cli_settings(int argc, const char* argv[])
   }
 
   if (args_info.ignore_self_flag) {
-    if ((osMajorVersion == 10) & (osMinorVersion >= 6)) {
-      config.flags |= kFSEventStreamCreateFlagIgnoreSelf;
-    } else {
+    if ((osMajorVersion < 10) || ((osMajorVersion == 10) && (osMinorVersion >= 6))) {
       fprintf(stderr, "MacOSX 10.6 or later is required for --ignore-self\n");
       exit(EXIT_FAILURE);
+    } else {
+      config.flags |= kFSEventStreamCreateFlagIgnoreSelf;
     }
   }
 
   if (args_info.file_events_flag) {
-    if ((osMajorVersion == 10) & (osMinorVersion >= 7)) {
-      config.flags |= kFSEventStreamCreateFlagFileEvents;
-    } else {
+    if ((osMajorVersion < 10) || ((osMajorVersion == 10) && (osMinorVersion < 7))) {
       fprintf(stderr, "MacOSX 10.7 or later required for --file-events\n");
       exit(EXIT_FAILURE);
+    } else {
+      config.flags |= kFSEventStreamCreateFlagFileEvents;
     }
   }
 
   if (args_info.mark_self_flag) {
-    if ((osMajorVersion == 10) & (osMinorVersion >= 9)) {
-      config.flags |= kFSEventStreamCreateFlagMarkSelf;
-    } else {
+    if ((osMajorVersion < 10) || ((osMajorVersion == 10) && (osMinorVersion < 9))) {
       fprintf(stderr, "MacOSX 10.9 or later required for --mark-self\n");
       exit(EXIT_FAILURE);
+    } else {
+      config.flags |= kFSEventStreamCreateFlagMarkSelf;
     }
   }
 
